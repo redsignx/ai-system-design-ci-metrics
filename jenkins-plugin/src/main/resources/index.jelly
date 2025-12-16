@@ -1,0 +1,5 @@
+<?jelly escape-by-default='true'?>
+<div>
+  This plugin collects Pipeline stage lifecycle events (start/end) and sends them to a remote endpoint via HTTP.
+  It supports Pipeline and Multibranch Pipeline jobs, handles parallel stages, and includes retry logic with exponential backoff.
+</div>

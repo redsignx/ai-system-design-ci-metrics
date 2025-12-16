@@ -1,0 +1,171 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Pipeline Metrics Event Schema",
+  "description": "Schema for Pipeline stage lifecycle events",
+  "definitions": {
+    "baseEvent": {
+      "type": "object",
+      "required": [
+        "event_type",
+        "event_version",
+        "timestamp",
+        "stage_id",
+        "stage_name",
+        "job_full_name",
+        "build_number",
+        "build_url",
+        "node_id"
+      ],
+      "properties": {
+        "event_type": {
+          "type": "string",
+          "enum": ["stage_start", "stage_end"],
+          "description": "Type of event"
+        },
+        "event_version": {
+          "type": "string",
+          "description": "Schema version",
+          "const": "1.0"
+        },
+        "timestamp": {
+          "type": "integer",
+          "description": "Unix timestamp in milliseconds when the event occurred"
+        },
+        "stage_id": {
+          "type": "string",
+          "description": "Unique identifier for this stage execution (format: job_full_name#build_number:node_id)"
+        },
+        "stage_name": {
+          "type": "string",
+          "description": "Display name of the stage"
+        },
+        "job_full_name": {
+          "type": "string",
+          "description": "Full name of the job including folder path"
+        },
+        "build_number": {
+          "type": "integer",
+          "description": "Build number"
+        },
+        "build_url": {
+          "type": "string",
+          "description": "Relative URL to the build"
+        },
+        "branch_name": {
+          "type": ["string", "null"],
+          "description": "Git branch name (for Multibranch pipelines, null otherwise)"
+        },
+        "change_id": {
+          "type": ["string", "null"],
+          "description": "Pull request or change ID (e.g., 'PR-123', null for regular branches)"
+        },
+        "change_target": {
+          "type": ["string", "null"],
+          "description": "Target branch for pull requests (null otherwise)"
+        },
+        "node_id": {
+          "type": "string",
+          "description": "FlowNode ID from Jenkins Pipeline execution graph"
+        }
+      }
+    }
+  },
+  "oneOf": [
+    {
+      "title": "Stage Start Event",
+      "description": "Event emitted when a pipeline stage starts execution",
+      "allOf": [
+        {"$ref": "#/definitions/baseEvent"},
+        {
+          "properties": {
+            "event_type": {"const": "stage_start"}
+          }
+        }
+      ]
+    },
+    {
+      "title": "Stage End Event",
+      "description": "Event emitted when a pipeline stage completes (successfully or with failure)",
+      "allOf": [
+        {"$ref": "#/definitions/baseEvent"},
+        {
+          "type": "object",
+          "required": ["status", "duration_ms"],
+          "properties": {
+            "event_type": {"const": "stage_end"},
+            "status": {
+              "type": "string",
+              "enum": ["SUCCESS", "FAILURE"],
+              "description": "Stage status"
+            },
+            "result": {
+              "type": ["string", "null"],
+              "enum": ["SUCCESS", "FAILURE", null],
+              "description": "Stage result"
+            },
+            "duration_ms": {
+              "type": "integer",
+              "description": "Duration in milliseconds"
+            },
+            "error_message": {
+              "type": ["string", "null"],
+              "description": "Error message if the stage failed (null on success)"
+            }
+          }
+        }
+      ]
+    }
+  ],
+  "examples": [
+    {
+      "event_type": "stage_start",
+      "event_version": "1.0",
+      "timestamp": 1234567890000,
+      "stage_id": "job/my-pipeline#42:node-123",
+      "stage_name": "Build",
+      "job_full_name": "folder/my-pipeline",
+      "build_number": 42,
+      "build_url": "job/folder/my-pipeline/42/",
+      "branch_name": "main",
+      "change_id": null,
+      "change_target": null,
+      "node_id": "node-123"
+    },
+    {
+      "event_type": "stage_end",
+      "event_version": "1.0",
+      "timestamp": 1234567895000,
+      "stage_id": "job/my-pipeline#42:node-123",
+      "stage_name": "Build",
+      "job_full_name": "folder/my-pipeline",
+      "build_number": 42,
+      "build_url": "job/folder/my-pipeline/42/",
+      "branch_name": "main",
+      "change_id": null,
+      "change_target": null,
+      "node_id": "node-123",
+      "status": "SUCCESS",
+      "result": "SUCCESS",
+      "duration_ms": 5000,
+      "error_message": null
+    },
+    {
+      "event_type": "stage_end",
+      "event_version": "1.0",
+      "timestamp": 1234567893000,
+      "stage_id": "job/my-pipeline#42:node-124",
+      "stage_name": "Test",
+      "job_full_name": "folder/my-pipeline",
+      "build_number": 42,
+      "build_url": "job/folder/my-pipeline/42/",
+      "branch_name": "feature/new-feature",
+      "change_id": "PR-456",
+      "change_target": "main",
+      "node_id": "node-124",
+      "status": "FAILURE",
+      "result": "FAILURE",
+      "duration_ms": 3000,
+      "error_message": "Tests failed with 3 failures"
+    }
+  ]
+}

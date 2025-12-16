@@ -1,8 +1,61 @@
 # ai-system-design-ci-metrics
 
-Jenkins shared library helpers for emitting CI metrics.
+A collection of tools for collecting and emitting CI/CD metrics from Jenkins pipelines.
 
-## Key changes / current behavior
+## Components
+
+This repository contains two independent approaches for collecting pipeline metrics:
+
+### 1. Jenkins Plugin (Recommended)
+
+**Location**: [`jenkins-plugin/`](jenkins-plugin/)
+
+A Jenkins controller-side plugin that automatically captures Pipeline stage lifecycle events and sends them to a remote endpoint via HTTP.
+
+**Features:**
+- ✅ Zero Jenkinsfile changes required
+- ✅ Automatic stage tracking for all Pipeline jobs
+- ✅ Multibranch Pipeline support with branch/PR metadata
+- ✅ Handles parallel and nested stages automatically
+- ✅ Asynchronous delivery with retry logic
+- ✅ Secure token storage
+
+**Quick Start:**
+```bash
+cd jenkins-plugin
+mvn clean package
+# Install target/pipeline-metrics.hpi via Jenkins Plugin Manager
+```
+
+See [jenkins-plugin/README.md](jenkins-plugin/README.md) for complete documentation.
+
+### 2. Jenkins Shared Library (Legacy/Optional)
+
+**Location**: `vars/`
+
+Jenkins shared library helpers for emitting CI metrics from within Jenkinsfiles.
+
+**Note**: The shared library is now **optional** and maintained for backward compatibility. New projects should use the Jenkins plugin instead.
+
+## Comparison: Plugin vs Shared Library
+
+| Feature | Plugin | Shared Library |
+|---------|--------|----------------|
+| Jenkinsfile changes required | ❌ No | ✅ Yes |
+| Works with existing pipelines | ✅ Yes | ❌ No |
+| Runs on | Controller | Agent |
+| Multibranch metadata | ✅ Automatic | ⚠️ Manual |
+| Parallel stage handling | ✅ Automatic | ⚠️ Manual |
+| Retry logic | ✅ Built-in | ❌ Basic |
+| Secure token storage | ✅ Jenkins Secret | ❌ Env var |
+
+**Recommendation**: Use the Jenkins plugin for all new projects. The shared library is maintained for backward compatibility only.
+
+---
+
+## Shared Library Documentation
+
+### Key changes / current behavior
 
 - **No parent/stack context tracking**: the library no longer tracks parent stages or a stage stack.
 - **Parallel does not need special handling**: use Jenkins **native** `parallel(...)`.

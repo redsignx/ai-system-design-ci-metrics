@@ -1,0 +1,26 @@
+<?jelly escape-by-default='true'?>
+<j:jelly xmlns:j="jelly:core" xmlns:f="/lib/form">
+  <f:section title="Pipeline Metrics Configuration">
+    <f:entry title="Endpoint URL" field="endpointUrl">
+      <f:textbox />
+    </f:entry>
+    <f:entry title="Bearer Token" field="bearerToken">
+      <f:password />
+    </f:entry>
+    <f:entry title="Connection Timeout (seconds)" field="connectionTimeoutSeconds">
+      <f:number default="10" min="1" />
+    </f:entry>
+    <f:entry title="Read Timeout (seconds)" field="readTimeoutSeconds">
+      <f:number default="30" min="1" />
+    </f:entry>
+    <f:entry title="Max Queue Size" field="maxQueueSize">
+      <f:number default="1000" min="1" />
+    </f:entry>
+    <f:entry title="Max Retries" field="maxRetries">
+      <f:number default="3" min="0" />
+    </f:entry>
+    <f:entry title="Initial Retry Delay (seconds)" field="initialRetryDelaySeconds">
+      <f:number default="2" min="1" />
+    </f:entry>
+  </f:section>
+</j:jelly>
