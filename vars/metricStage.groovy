@@ -1,93 +1,61 @@
-#!/usr/bin/groovy
+#!/usr/bin/env groovy
 
-import java.util.UUID
+import groovy.json.JsonOutput
 
 /**
  * metricStage
- * -----------
- * Stage wrapper that emits ONLY a stage_end event.
  *
- * Features:
- * - stage_id: UUID per stage invocation
- * - parent_stage_id: maintained via a stack
- * - parallel_group / parallel_branch: supported via shared context, set by metricParallel
- * - best-effort emission (never fails pipeline)
+ * Simplified stage wrapper that emits a single stage_end event per invocation.
  *
- * Usage:
- *   metricStage('Build') {
- *     sh 'make build'
- *   }
+ * - Generates a unique stage_id for each invocation.
+ * - Runs the provided body.
+ * - Emits stage_end with: stage_name, stage_id, status, duration_ms.
+ * - On error, also includes: error_class, error_message.
+ *
+ * Notes:
+ * - This library no longer tracks parent/stack context.
+ * - No special handling is required for parallel; use Jenkins native parallel.
  */
-
-def call(String stageName, Closure body) {
-  if (stageName == null) {
-    stageName = ''
-  }
-
-  String buildKey = (env.BUILD_TAG ?: "${env.JOB_NAME ?: 'job'}#${env.BUILD_NUMBER ?: '0'}")
-
-  // Shared per-build context stored in the script binding.
-  if (!binding.hasVariable('_metricCtx')) {
-    binding.setVariable('_metricCtx', [:])
-  }
-  Map allCtx = (Map) binding.getVariable('_metricCtx')
-  if (!allCtx.containsKey(buildKey)) {
-    allCtx[buildKey] = [ stack: [], parallel_group: null, parallel_branch: null ]
-  }
-  Map ctx = (Map) allCtx[buildKey]
-  List stack = (List) ctx.stack
-
-  String stageId = UUID.randomUUID().toString()
-  String parentStageId = stack ? stack[-1]?.toString() : null
+def call(String stageName, Map metadata = [:], Closure body) {
+  // Unique per invocation. Prefer UUID for uniqueness across nodes/executors.
+  final String stageId = java.util.UUID.randomUUID().toString()
 
   long startMs = System.currentTimeMillis()
   String status = 'SUCCESS'
   Throwable err = null
 
-  stack.add(stageId)
-
   try {
     stage(stageName) {
       body.call()
     }
-  } catch (org.jenkinsci.plugins.workflow.steps.FlowInterruptedException fie) {
-    status = 'ABORTED'
-    err = fie
-    throw fie
   } catch (Throwable t) {
     status = 'FAILURE'
     err = t
     throw t
   } finally {
-    long durationMs = Math.max(0L, System.currentTimeMillis() - startMs)
+    long durationMs = System.currentTimeMillis() - startMs
 
-    // Pop current stage id (defensive)
-    if (stack && stack[-1]?.toString() == stageId) {
-      stack.remove(stack.size() - 1)
-    } else {
-      // If stack got out of sync for any reason, remove first occurrence.
-      stack.remove(stageId)
+    Map payload = [:]
+    payload.stage_name = stageName
+    payload.stage_id = stageId
+    payload.status = status
+    payload.duration_ms = durationMs
+
+    // Allow callers to attach custom fields (e.g., to disambiguate runs in parallel).
+    if (metadata != null && !metadata.isEmpty()) {
+      payload.putAll(metadata)
     }
-
-    Map data = [
-      stage_name      : stageName,
-      stage_id        : stageId,
-      parent_stage_id : parentStageId,
-      parallel_group  : ctx.parallel_group,
-      parallel_branch : ctx.parallel_branch,
-      status          : status,
-      duration_ms     : durationMs,
-    ]
 
     if (err != null) {
-      data.error_class = err.getClass().getName()
-      data.error_message = (err.getMessage() ?: '').take(500)
+      payload.error_class = err.getClass().getName()
+      payload.error_message = (err.getMessage() ?: err.toString())
     }
 
+    // Emit via the generic metricEvent step if present, otherwise fall back to echo.
     try {
-      metricEvent(eventType: 'stage_end', data: data)
-    } catch (ignored) {
-      // never fail pipeline
+      metricEvent('stage_end', payload)
+    } catch (MissingMethodException ignored) {
+      echo(JsonOutput.toJson([event: 'stage_end', data: payload]))
     }
   }
 }

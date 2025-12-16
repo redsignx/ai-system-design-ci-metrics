@@ -1,119 +1,41 @@
-# Jenkins Shared Library: CI Pipeline Metrics (No Plugin)
+# ai-system-design-ci-metrics
 
-This repository provides a **Jenkins Shared Library** to emit **pipeline execution metrics** (stage-level) to a remote HTTP endpoint.
+Jenkins shared library helpers for emitting CI metrics.
 
-Designed for:
-- Jenkins controller on VM
-- Agents running in containers
-- Many **parallel** and **nested parallel** stages
-- Rich metadata needs for downstream analysis/visualization
-- **No Jenkins plugin** development
+## Key changes / current behavior
 
-## Key properties
+- **No parent/stack context tracking**: the library no longer tracks parent stages or a stage stack.
+- **Parallel does not need special handling**: use Jenkins **native** `parallel(...)`.
+- `metricParallel` is **optional / legacy**. It is kept as a thin wrapper around `parallel` for backward compatibility, but it does not set any context.
 
-- Emits **stage_end** events only (no stage_start), to reduce noise.
-- Handles **parallel** and **nested parallel** by propagating context fields.
-- Provides unique IDs so downstream systems can rebuild the execution tree:
-  - `stage_id` (UUID)
-  - `parent_stage_id` (UUID)
-- Adds parallel grouping for better visualization:
-  - `parallel_group` (UUID per parallel group)
-  - `parallel_branch` (branch name)
-- Best-effort delivery: HTTP failures do **not** fail the build.
+## Steps
 
-## Configuration
+### `metricStage(stageName, metadata = [:]) { ... }`
 
-Set these environment variables in your pipeline:
+Wraps a Jenkins `stage(...)` and emits a single `stage_end` event per invocation.
 
-- `METRIC_ENDPOINT_URL` (required): HTTP endpoint URL to POST JSON events to
-- `METRIC_CURL_TIMEOUT_SEC` (optional, default `3`): curl timeout
-- `METRIC_EMIT` (optional, default `true`): set `false` to disable emission
+Emitted fields:
 
-Agent image requirements:
-- `curl`
-- `base64`
-
-## Event schema
-
-### stage_end event
-
-The library emits JSON like:
-
-- `event_type`: `stage_end`
-- `ts`: ISO-8601 UTC timestamp
-- `job_name`, `build_number`, `build_url`
 - `stage_name`
-- `stage_id`, `parent_stage_id`
-- `parallel_group`, `parallel_branch`
-- `status`: `SUCCESS` / `FAILURE` / `ABORTED` / `UNSTABLE` / `UNKNOWN`
+- `stage_id` (unique per invocation)
+- `status` (`SUCCESS` or `FAILURE`)
 - `duration_ms`
-- Optional: `error_class`, `error_message`
+- optionally `error_class`, `error_message` on failure
 
-Downstream apps can rebuild stage trees and parallel swimlanes using `stage_id` + `parent_stage_id` + parallel fields.
+You may pass additional `metadata` fields to help disambiguate multiple invocations with the same `stage_name` (e.g., when running in parallel).
 
-## Usage
+### `metricEvent(eventName, data)`
 
-### 1) Configure shared library in Jenkins
+Use to emit custom events and/or attach additional information before/after stages.
 
-In Jenkins:
-- **Manage Jenkins → System → Global Pipeline Libraries**
-- Add this repo as a library, e.g. name: `ai-system-design-ci-metrics`
+## Parallel guidance
 
-### 2) Use in Jenkinsfile
+If you run the same `stage_name` in multiple parallel branches:
 
-```groovy
-@Library('ai-system-design-ci-metrics') _
+- `metricStage` will still generate a unique `stage_id` for each invocation.
+- Add per-branch metadata (e.g. `branch: 'linux'`) via the `metadata` argument, **or**
+- Emit a `metricEvent(...)` after the stage to add additional branch-specific information.
 
-pipeline {
-  agent any
-  environment {
-    METRIC_ENDPOINT_URL = 'https://metrics.example.com/events'
-  }
+## Example
 
-  stages {
-    stage('Build') {
-      steps {
-        script {
-          metricStage('Build') {
-            sh 'make build'
-          }
-        }
-      }
-    }
-
-    stage('Test') {
-      steps {
-        script {
-          metricStage('Test') {
-            metricParallel([
-              'unit': {
-                metricStage('Unit') { sh 'make test-unit' }
-              },
-              'integration': {
-                metricStage('Integration') { sh 'make test-integration' }
-              }
-            ])
-          }
-        }
-      }
-    }
-  }
-}
-```
-
-## Files
-
-- `vars/metricEvent.groovy`: generic HTTP event emitter
-- `vars/metricStage.groovy`: stage wrapper emitting stage_end
-- `vars/metricParallel.groovy`: parallel wrapper setting parallel context
-- `examples/Jenkinsfile`: nested parallel demo
-
-## Notes / best practices
-
-- Do not put secrets into emitted metadata.
-- Keep `error_message` short to avoid huge payloads.
-- If you need auth headers, extend curl in `metricEvent.groovy`.
-
----
-
-License: MIT (adjust as needed)
+See [`examples/Jenkinsfile`](examples/Jenkinsfile).

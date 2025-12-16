@@ -2,43 +2,27 @@
 
 pipeline {
   agent any
-  environment {
-    METRIC_ENDPOINT_URL = 'https://metrics.example.com/events'
-    METRIC_CURL_TIMEOUT_SEC = '3'
-  }
 
   stages {
-    stage('Demo') {
+    stage('Build') {
       steps {
         script {
-          metricStage('Top') {
-            sh 'echo top work'
-
-            metricParallel([
-              'branch-a': {
-                metricStage('A1') {
-                  sh 'echo A1'
-                }
-                metricParallel([
-                  'a-sub-1': {
-                    metricStage('A-sub-1') { sh 'echo A-sub-1' }
-                  },
-                  'a-sub-2': {
-                    metricStage('A-sub-2') { sh 'echo A-sub-2' }
-                  }
-                ])
-              },
-              'branch-b': {
-                metricStage('B1') {
-                  sh 'echo B1'
-                }
+          parallel(
+            linux: {
+              metricStage('unit-tests', [os: 'linux', shard: 1]) {
+                sh 'echo running linux tests'
               }
-            ])
-
-            metricStage('After Parallel') {
-              sh 'echo done'
+              // If you need to emit extra info after the stage:
+              // metricEvent('after_stage', [stage_name: 'unit-tests', os: 'linux', note: 'extra metadata'])
+            },
+            windows: {
+              metricStage('unit-tests', [os: 'windows', shard: 1]) {
+                bat 'echo running windows tests'
+              }
+              // If metricStage metadata is not enough for your use case,
+              // emit a custom event after stage_end via metricEvent.
             }
-          }
+          )
         }
       }
     }
