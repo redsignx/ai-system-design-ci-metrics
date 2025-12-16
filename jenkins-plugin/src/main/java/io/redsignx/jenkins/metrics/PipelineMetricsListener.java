@@ -3,14 +3,14 @@ package io.redsignx.jenkins.metrics;
 import hudson.Extension;
 import hudson.model.Run;
 import hudson.model.TaskListener;
-import jenkins.branch.MultiBranchProject;
+import org.jenkinsci.plugins.workflow.actions.LabelAction;
+import org.jenkinsci.plugins.workflow.cps.nodes.StepEndNode;
 import org.jenkinsci.plugins.workflow.cps.nodes.StepStartNode;
 import org.jenkinsci.plugins.workflow.flow.FlowExecution;
 import org.jenkinsci.plugins.workflow.flow.FlowExecutionListener;
 import org.jenkinsci.plugins.workflow.flow.GraphListener;
 import org.jenkinsci.plugins.workflow.graph.FlowNode;
 import org.jenkinsci.plugins.workflow.job.WorkflowRun;
-import org.jenkinsci.plugins.workflow.support.steps.StageStepExecution;
 
 import javax.annotation.CheckForNull;
 import java.util.Map;
@@ -26,8 +26,8 @@ public class PipelineMetricsListener extends FlowExecutionListener {
     
     private static final Logger LOGGER = Logger.getLogger(PipelineMetricsListener.class.getName());
     
-    // Track stage start times by node ID
-    private final Map<String, Long> stageStartTimes = new ConcurrentHashMap<>();
+    // Track stage start times and info by start node ID
+    private final Map<String, StageStartInfo> stageStartInfoMap = new ConcurrentHashMap<>();
     
     @Override
     public void onCreated(FlowExecution execution) {
@@ -50,47 +50,42 @@ public class PipelineMetricsListener extends FlowExecutionListener {
         @Override
         public void onNewHead(FlowNode node) {
             try {
-                if (isStageNode(node)) {
-                    handleStageNode(node);
+                if (isStageStartNode(node)) {
+                    handleStageStart((StepStartNode) node);
+                } else if (isStageEndNode(node)) {
+                    handleStageEnd((StepEndNode) node);
                 }
             } catch (Exception e) {
                 LOGGER.log(Level.WARNING, "Error handling flow node", e);
             }
         }
         
-        private boolean isStageNode(FlowNode node) {
-            // Check if this is a stage node
+        private boolean isStageStartNode(FlowNode node) {
+            // Check if this is a stage start node
             return node instanceof StepStartNode && 
                    "stage".equals(((StepStartNode) node).getDescriptor().getFunctionName());
         }
         
-        private void handleStageNode(FlowNode node) {
-            String nodeId = node.getId();
-            String stageName = getStageName(node);
-            
-            if (stageName == null) {
-                return;
+        private boolean isStageEndNode(FlowNode node) {
+            if (!(node instanceof StepEndNode)) {
+                return false;
             }
-            
-            // Check if stage is starting or ending
-            if (node instanceof StepStartNode) {
-                handleStageStart(node, nodeId, stageName);
-            }
-            
-            // For stage end, we need to check the node's status
-            if (node.isActive()) {
-                // Stage is still running, record start time
-                stageStartTimes.put(nodeId, System.currentTimeMillis());
-            } else {
-                // Stage has completed
-                handleStageEnd(node, nodeId, stageName);
-            }
+            StepEndNode endNode = (StepEndNode) node;
+            FlowNode startNode = endNode.getStartNode();
+            return startNode instanceof StepStartNode && 
+                   "stage".equals(((StepStartNode) startNode).getDescriptor().getFunctionName());
         }
         
-        private void handleStageStart(FlowNode node, String nodeId, String stageName) {
+        private void handleStageStart(StepStartNode startNode) {
             try {
+                String nodeId = startNode.getId();
+                String stageName = getStageName(startNode);
+                
+                if (stageName == null) {
+                    return;
+                }
+                
                 long timestamp = System.currentTimeMillis();
-                stageStartTimes.put(nodeId, timestamp);
                 
                 Run<?, ?> run = getRunFromExecution(execution);
                 if (run == null) {
@@ -98,6 +93,14 @@ public class PipelineMetricsListener extends FlowExecutionListener {
                 }
                 
                 BuildContext context = extractBuildContext(run);
+                
+                // Store start info for later use in end event
+                StageStartInfo startInfo = new StageStartInfo();
+                startInfo.nodeId = nodeId;
+                startInfo.stageName = stageName;
+                startInfo.timestamp = timestamp;
+                startInfo.context = context;
+                stageStartInfoMap.put(nodeId, startInfo);
                 
                 StageStartEvent event = new StageStartEvent(
                     generateStageId(run, nodeId),
@@ -119,41 +122,47 @@ public class PipelineMetricsListener extends FlowExecutionListener {
             }
         }
         
-        private void handleStageEnd(FlowNode node, String nodeId, String stageName) {
+        private void handleStageEnd(StepEndNode endNode) {
             try {
+                FlowNode startNode = endNode.getStartNode();
+                String startNodeId = startNode.getId();
+                
+                StageStartInfo startInfo = stageStartInfoMap.remove(startNodeId);
+                if (startInfo == null) {
+                    LOGGER.fine("No start info found for stage end node: " + endNode.getId());
+                    return;
+                }
+                
                 long endTime = System.currentTimeMillis();
-                Long startTime = stageStartTimes.remove(nodeId);
-                long durationMs = startTime != null ? endTime - startTime : 0;
+                long durationMs = endTime - startInfo.timestamp;
                 
                 Run<?, ?> run = getRunFromExecution(execution);
                 if (run == null) {
                     return;
                 }
                 
-                BuildContext context = extractBuildContext(run);
-                
                 String status = "SUCCESS";
                 String result = null;
                 String errorMessage = null;
                 
-                if (node.getError() != null) {
+                if (endNode.getError() != null) {
                     status = "FAILURE";
-                    errorMessage = node.getError().getMessage();
+                    errorMessage = endNode.getError().getMessage();
                     result = "FAILURE";
                 } else {
                     result = "SUCCESS";
                 }
                 
                 StageEndEvent event = new StageEndEvent(
-                    generateStageId(run, nodeId),
-                    stageName,
-                    context.jobFullName,
-                    context.buildNumber,
-                    context.buildUrl,
-                    context.branchName,
-                    context.changeId,
-                    context.changeTarget,
-                    nodeId,
+                    generateStageId(run, startNodeId),
+                    startInfo.stageName,
+                    startInfo.context.jobFullName,
+                    startInfo.context.buildNumber,
+                    startInfo.context.buildUrl,
+                    startInfo.context.branchName,
+                    startInfo.context.changeId,
+                    startInfo.context.changeTarget,
+                    startNodeId,
                     endTime,
                     status,
                     result,
@@ -162,7 +171,7 @@ public class PipelineMetricsListener extends FlowExecutionListener {
                 );
                 
                 MetricDeliveryService.getInstance().queueEvent(event);
-                LOGGER.fine("Queued stage_end event for stage: " + stageName);
+                LOGGER.fine("Queued stage_end event for stage: " + startInfo.stageName);
             } catch (Exception e) {
                 LOGGER.log(Level.WARNING, "Error handling stage end", e);
             }
@@ -170,6 +179,13 @@ public class PipelineMetricsListener extends FlowExecutionListener {
         
         @CheckForNull
         private String getStageName(FlowNode node) {
+            // Try to get stage name from LabelAction
+            LabelAction labelAction = node.getAction(LabelAction.class);
+            if (labelAction != null && labelAction.getDisplayName() != null) {
+                return labelAction.getDisplayName();
+            }
+            
+            // Fallback to node display name
             String name = node.getDisplayName();
             if (name != null && !name.isEmpty()) {
                 return name;
@@ -213,6 +229,13 @@ public class PipelineMetricsListener extends FlowExecutionListener {
             
             return context;
         }
+    }
+    
+    private static class StageStartInfo {
+        String nodeId;
+        String stageName;
+        long timestamp;
+        BuildContext context;
     }
     
     private static class BuildContext {
