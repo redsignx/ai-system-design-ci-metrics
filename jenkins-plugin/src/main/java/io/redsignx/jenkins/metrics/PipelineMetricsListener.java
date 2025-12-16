@@ -217,11 +217,12 @@ public class PipelineMetricsListener extends FlowExecutionListener {
             if (run instanceof WorkflowRun) {
                 WorkflowRun workflowRun = (WorkflowRun) run;
                 
-                // Try to get branch name from environment
+                // Get environment once and reuse
                 try {
-                    context.branchName = workflowRun.getEnvironment(TaskListener.NULL).get("BRANCH_NAME");
-                    context.changeId = workflowRun.getEnvironment(TaskListener.NULL).get("CHANGE_ID");
-                    context.changeTarget = workflowRun.getEnvironment(TaskListener.NULL).get("CHANGE_TARGET");
+                    hudson.EnvVars env = workflowRun.getEnvironment(TaskListener.NULL);
+                    context.branchName = env.get("BRANCH_NAME");
+                    context.changeId = env.get("CHANGE_ID");
+                    context.changeTarget = env.get("CHANGE_TARGET");
                 } catch (Exception e) {
                     LOGGER.log(Level.FINE, "Could not extract branch/change info", e);
                 }

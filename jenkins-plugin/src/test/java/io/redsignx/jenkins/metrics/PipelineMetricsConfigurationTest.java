@@ -1,5 +1,6 @@
 package io.redsignx.jenkins.metrics;
 
+import hudson.util.FormValidation;
 import org.junit.Test;
 import static org.junit.Assert.*;
 
@@ -23,40 +24,40 @@ public class PipelineMetricsConfigurationTest {
     public void testValidationAcceptsValidUrl() {
         PipelineMetricsConfiguration config = new PipelineMetricsConfiguration();
         
-        assertEquals("OK", config.doCheckEndpointUrl("http://localhost:8080/metrics").kind.toString());
-        assertEquals("OK", config.doCheckEndpointUrl("https://api.example.com/events").kind.toString());
+        assertEquals(FormValidation.Kind.OK, config.doCheckEndpointUrl("http://localhost:8080/metrics").kind);
+        assertEquals(FormValidation.Kind.OK, config.doCheckEndpointUrl("https://api.example.com/events").kind);
     }
     
     @Test
     public void testValidationRejectsInvalidUrl() {
         PipelineMetricsConfiguration config = new PipelineMetricsConfiguration();
         
-        assertEquals("ERROR", config.doCheckEndpointUrl("not-a-valid-url").kind.toString());
+        assertEquals(FormValidation.Kind.ERROR, config.doCheckEndpointUrl("not-a-valid-url").kind);
     }
     
     @Test
     public void testValidationAcceptsEmptyUrl() {
         PipelineMetricsConfiguration config = new PipelineMetricsConfiguration();
         
-        assertEquals("OK", config.doCheckEndpointUrl("").kind.toString());
-        assertEquals("OK", config.doCheckEndpointUrl(null).kind.toString());
+        assertEquals(FormValidation.Kind.OK, config.doCheckEndpointUrl("").kind);
+        assertEquals(FormValidation.Kind.OK, config.doCheckEndpointUrl(null).kind);
     }
     
     @Test
     public void testQueueSizeValidation() {
         PipelineMetricsConfiguration config = new PipelineMetricsConfiguration();
         
-        assertEquals("ERROR", config.doCheckMaxQueueSize(0).kind.toString());
-        assertEquals("OK", config.doCheckMaxQueueSize(100).kind.toString());
-        assertEquals("WARNING", config.doCheckMaxQueueSize(15000).kind.toString());
+        assertEquals(FormValidation.Kind.ERROR, config.doCheckMaxQueueSize(0).kind);
+        assertEquals(FormValidation.Kind.OK, config.doCheckMaxQueueSize(100).kind);
+        assertEquals(FormValidation.Kind.WARNING, config.doCheckMaxQueueSize(15000).kind);
     }
     
     @Test
     public void testRetryValidation() {
         PipelineMetricsConfiguration config = new PipelineMetricsConfiguration();
         
-        assertEquals("ERROR", config.doCheckMaxRetries(-1).kind.toString());
-        assertEquals("OK", config.doCheckMaxRetries(3).kind.toString());
-        assertEquals("WARNING", config.doCheckMaxRetries(15).kind.toString());
+        assertEquals(FormValidation.Kind.ERROR, config.doCheckMaxRetries(-1).kind);
+        assertEquals(FormValidation.Kind.OK, config.doCheckMaxRetries(3).kind);
+        assertEquals(FormValidation.Kind.WARNING, config.doCheckMaxRetries(15).kind);
     }
 }

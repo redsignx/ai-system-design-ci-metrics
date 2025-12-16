@@ -3,8 +3,6 @@ package io.redsignx.jenkins.metrics;
 import com.google.gson.annotations.SerializedName;
 
 import javax.annotation.CheckForNull;
-import java.util.HashMap;
-import java.util.Map;
 
 /**
  * Base class for pipeline metric events.

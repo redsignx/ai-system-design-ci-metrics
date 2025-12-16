@@ -1,6 +1,5 @@
 package io.redsignx.jenkins.metrics;
 
-import com.cloudbees.plugins.credentials.common.StandardCredentials;
 import hudson.Extension;
 import hudson.util.FormValidation;
 import hudson.util.Secret;

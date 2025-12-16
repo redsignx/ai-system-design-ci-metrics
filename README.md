@@ -53,6 +53,55 @@ Jenkins shared library helpers for emitting CI metrics from within Jenkinsfiles.
 
 ---
 
+## Migration Guide: Shared Library → Plugin
+
+If you're currently using the shared library (`metricStage`, `metricEvent`), migrating to the plugin is straightforward:
+
+### Step 1: Install the Plugin
+```bash
+cd jenkins-plugin
+mvn clean package
+# Install target/pipeline-metrics.hpi via Jenkins → Manage Jenkins → Manage Plugins → Advanced → Upload Plugin
+```
+
+### Step 2: Configure the Plugin
+1. Go to Jenkins → Manage Jenkins → Configure System
+2. Find "Pipeline Metrics Configuration"
+3. Set your endpoint URL and optional bearer token
+4. Click "Save"
+
+### Step 3: Update Your Jenkinsfiles
+You have two options:
+
+**Option A: Remove the shared library entirely**
+```groovy
+// Before (with shared library)
+@Library('ai-system-design-ci-metrics') _
+
+metricStage('Build') {
+  sh 'make build'
+}
+
+// After (with plugin - much simpler!)
+stage('Build') {
+  steps {
+    sh 'make build'
+  }
+}
+```
+
+**Option B: Keep both (during transition)**
+The plugin and shared library can coexist. They will emit separate events, which may be useful during migration for validation.
+
+### Benefits of Migration
+- ✅ No Jenkinsfile changes for new pipelines
+- ✅ Automatic stage tracking in all existing pipelines
+- ✅ Better Multibranch support
+- ✅ Improved retry logic and error handling
+- ✅ Secure token storage
+
+---
+
 ## Shared Library Documentation
 
 ### Key changes / current behavior
