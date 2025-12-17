@@ -1,0 +1,18 @@
+# Maven
+jenkins-plugin/target/
+jenkins-plugin/work/
+jenkins-plugin/.mvn/
+jenkins-plugin/mvnw
+jenkins-plugin/mvnw.cmd
+
+# IDE
+.idea/
+*.iml
+.vscode/
+.classpath
+.project
+.settings/
+
+# OS
+.DS_Store
+Thumbs.db

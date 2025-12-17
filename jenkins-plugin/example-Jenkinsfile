@@ -1,0 +1,74 @@
+// Example Jenkinsfile demonstrating pipeline metrics collection
+// No changes needed - the plugin automatically captures stage events!
+
+pipeline {
+    agent any
+    
+    stages {
+        stage('Checkout') {
+            steps {
+                echo 'Checking out code...'
+                // Your checkout steps here
+            }
+        }
+        
+        stage('Build') {
+            steps {
+                echo 'Building application...'
+                // Your build steps here
+            }
+        }
+        
+        stage('Test') {
+            parallel {
+                stage('Unit Tests') {
+                    steps {
+                        echo 'Running unit tests...'
+                        // Your unit test steps here
+                    }
+                }
+                stage('Integration Tests') {
+                    steps {
+                        echo 'Running integration tests...'
+                        // Your integration test steps here
+                    }
+                }
+                stage('E2E Tests') {
+                    steps {
+                        echo 'Running E2E tests...'
+                        // Your E2E test steps here
+                    }
+                }
+            }
+        }
+        
+        stage('Deploy') {
+            steps {
+                echo 'Deploying application...'
+                // Your deployment steps here
+            }
+        }
+    }
+    
+    post {
+        always {
+            echo 'Pipeline completed!'
+        }
+    }
+}
+
+/*
+ * The plugin will automatically capture and send the following events:
+ * 
+ * 1. stage_start for: Checkout, Build, Test, Unit Tests, Integration Tests, E2E Tests, Deploy
+ * 2. stage_end for: Checkout, Build, Test, Unit Tests, Integration Tests, E2E Tests, Deploy
+ * 
+ * Each event includes:
+ * - Stage name and unique ID
+ * - Job information (name, build number, URL)
+ * - Branch and PR information (for Multibranch pipelines)
+ * - Timestamps and duration (for stage_end)
+ * - Status and error messages (for failures)
+ * 
+ * No Jenkinsfile changes or wrapper functions are required!
+ */
